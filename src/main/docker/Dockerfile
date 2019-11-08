@@ -14,12 +14,12 @@
 # docker run -i --rm -p 8080:8080 quarkus/quarkusmsa-jvm
 #
 ###
-FROM fabric8/java-alpine-openjdk8-jre
-ENV JAVA_OPTIONS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
-ENV AB_ENABLED=jmx_exporter
-COPY target/lib/* /deployments/lib/
-COPY target/*-runner.jar /deployments/app.jar
-EXPOSE 8080
+FROM maven:3.6.1-jdk-8-slim AS build  
+COPY src /usr/src/app/src  
+COPY pom.xml /usr/src/app  
+RUN mvn -f /usr/src/app/pom.xml clean package
+
+FROM mcr.microsoft.com/java/jdk:8u212-zulu-alpine
 
 # run with user 1001 and be prepared for be running in OpenShift too
 RUN adduser -G root --no-create-home --disabled-password 1001 \
@@ -27,6 +27,14 @@ RUN adduser -G root --no-create-home --disabled-password 1001 \
   && chmod -R "g+rwX" /deployments \
   && chown -R 1001:root /deployments
 USER 1001
+
+
+ENV JAVA_OPTIONS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV AB_ENABLED=jmx_exporter
+COPY --from=build target/lib/* /deployments/lib/
+COPY --from=build target/*-runner.jar /deployments/app.jar
+
+RUN "cat /deployments/run-java.sh"
 
 ENTRYPOINT [ "/deployments/run-java.sh" ]
 EXPOSE 8080
